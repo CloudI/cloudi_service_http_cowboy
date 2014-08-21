@@ -109,6 +109,11 @@
         % (outgoing, #protocol_error{id = ID} = OutgoingResponse) ->
         %     {ID, protocol_rpc:encode(OutgoingResponse)}
         % end.
+-define(DEFAULT_WEBSOCKET_NAME_UNIQUE,            false). % see below:
+        % set to true if the websocket name (for outgoing service requests)
+        % should only ever be used by a single websocket connection.
+        % When set to true, the newest connection will kill any older
+        % connection(s) that share the same service name.
 -define(DEFAULT_WEBSOCKET_SUBSCRIPTIONS,             []). % see below:
         % Provide configuration similar to cloudi_service_router:
         % list({PatternSuffix :: string(),
@@ -180,47 +185,49 @@ close({Pattern, Pid})
 
 cloudi_service_init(Args, Prefix, Dispatcher) ->
     Defaults = [
-        {ip,                             ?DEFAULT_INTERFACE},
-        {port,                           ?DEFAULT_PORT},
-        {backlog,                        ?DEFAULT_BACKLOG},
-        {nodelay,                        ?DEFAULT_NODELAY},
-        {recv_timeout,                   ?DEFAULT_RECV_TIMEOUT},
-        {websocket_timeout,              ?DEFAULT_WEBSOCKET_TIMEOUT},
-        {websocket_output,               ?DEFAULT_WEBSOCKET_OUTPUT},
-        {websocket_connect,              ?DEFAULT_WEBSOCKET_CONNECT_ASYNC},
-        {websocket_disconnect,           ?DEFAULT_WEBSOCKET_DISCONNECT_ASYNC},
-        {websocket_connect_async,        ?DEFAULT_WEBSOCKET_CONNECT_ASYNC},
-        {websocket_connect_sync,         ?DEFAULT_WEBSOCKET_CONNECT_SYNC},
-        {websocket_disconnect_async,     ?DEFAULT_WEBSOCKET_DISCONNECT_ASYNC},
-        {websocket_disconnect_sync,      ?DEFAULT_WEBSOCKET_DISCONNECT_SYNC},
-        {websocket_ping,                 ?DEFAULT_WEBSOCKET_PING},
-        {websocket_protocol,             ?DEFAULT_WEBSOCKET_PROTOCOL},
-        {websocket_subscriptions,        ?DEFAULT_WEBSOCKET_SUBSCRIPTIONS},
-        {ssl,                            ?DEFAULT_SSL},
-        {compress,                       ?DEFAULT_COMPRESS},
-        {max_connections,                ?DEFAULT_MAX_CONNECTIONS},
-        {max_empty_lines,                ?DEFAULT_MAX_EMPTY_LINES},
-        {max_header_name_length,         ?DEFAULT_MAX_HEADER_NAME_LENGTH},
-        {max_header_value_length,        ?DEFAULT_MAX_HEADER_VALUE_LENGTH},
-        {max_headers,                    ?DEFAULT_MAX_HEADERS},
-        {max_keepalive,                  ?DEFAULT_MAX_KEEPALIVE},
-        {max_request_line_length,        ?DEFAULT_MAX_REQUEST_LINE_LENGTH},
-        {output,                         ?DEFAULT_OUTPUT},
-        {content_type,                   ?DEFAULT_CONTENT_TYPE},
-        {content_types_accepted,         ?DEFAULT_CONTENT_TYPES_ACCEPTED},
-        {set_x_forwarded_for,            ?DEFAULT_SET_X_FORWARDED_FOR},
-        {status_code_timeout,            ?DEFAULT_STATUS_CODE_TIMEOUT},
-        {use_websockets,                 ?DEFAULT_USE_WEBSOCKETS},
-        {use_spdy,                       ?DEFAULT_USE_SPDY},
-        {use_host_prefix,                ?DEFAULT_USE_HOST_PREFIX},
-        {use_client_ip_prefix,           ?DEFAULT_USE_CLIENT_IP_PREFIX},
-        {use_method_suffix,              ?DEFAULT_USE_METHOD_SUFFIX}],
+        {ip,                            ?DEFAULT_INTERFACE},
+        {port,                          ?DEFAULT_PORT},
+        {backlog,                       ?DEFAULT_BACKLOG},
+        {nodelay,                       ?DEFAULT_NODELAY},
+        {recv_timeout,                  ?DEFAULT_RECV_TIMEOUT},
+        {websocket_timeout,             ?DEFAULT_WEBSOCKET_TIMEOUT},
+        {websocket_output,              ?DEFAULT_WEBSOCKET_OUTPUT},
+        {websocket_connect,             ?DEFAULT_WEBSOCKET_CONNECT_ASYNC},
+        {websocket_disconnect,          ?DEFAULT_WEBSOCKET_DISCONNECT_ASYNC},
+        {websocket_connect_async,       ?DEFAULT_WEBSOCKET_CONNECT_ASYNC},
+        {websocket_connect_sync,        ?DEFAULT_WEBSOCKET_CONNECT_SYNC},
+        {websocket_disconnect_async,    ?DEFAULT_WEBSOCKET_DISCONNECT_ASYNC},
+        {websocket_disconnect_sync,     ?DEFAULT_WEBSOCKET_DISCONNECT_SYNC},
+        {websocket_ping,                ?DEFAULT_WEBSOCKET_PING},
+        {websocket_protocol,            ?DEFAULT_WEBSOCKET_PROTOCOL},
+        {websocket_name_unique,         ?DEFAULT_WEBSOCKET_NAME_UNIQUE},
+        {websocket_subscriptions,       ?DEFAULT_WEBSOCKET_SUBSCRIPTIONS},
+        {ssl,                           ?DEFAULT_SSL},
+        {compress,                      ?DEFAULT_COMPRESS},
+        {max_connections,               ?DEFAULT_MAX_CONNECTIONS},
+        {max_empty_lines,               ?DEFAULT_MAX_EMPTY_LINES},
+        {max_header_name_length,        ?DEFAULT_MAX_HEADER_NAME_LENGTH},
+        {max_header_value_length,       ?DEFAULT_MAX_HEADER_VALUE_LENGTH},
+        {max_headers,                   ?DEFAULT_MAX_HEADERS},
+        {max_keepalive,                 ?DEFAULT_MAX_KEEPALIVE},
+        {max_request_line_length,       ?DEFAULT_MAX_REQUEST_LINE_LENGTH},
+        {output,                        ?DEFAULT_OUTPUT},
+        {content_type,                  ?DEFAULT_CONTENT_TYPE},
+        {content_types_accepted,        ?DEFAULT_CONTENT_TYPES_ACCEPTED},
+        {set_x_forwarded_for,           ?DEFAULT_SET_X_FORWARDED_FOR},
+        {status_code_timeout,           ?DEFAULT_STATUS_CODE_TIMEOUT},
+        {use_websockets,                ?DEFAULT_USE_WEBSOCKETS},
+        {use_spdy,                      ?DEFAULT_USE_SPDY},
+        {use_host_prefix,               ?DEFAULT_USE_HOST_PREFIX},
+        {use_client_ip_prefix,          ?DEFAULT_USE_CLIENT_IP_PREFIX},
+        {use_method_suffix,             ?DEFAULT_USE_METHOD_SUFFIX}],
     [Interface, Port, Backlog, NoDelay, RecvTimeout,
      WebSocketTimeout, WebSocketOutputType0,
      WebSocketConnect0, WebSocketDisconnect0,
      WebSocketConnectAsync0, WebSocketConnectSync,
      WebSocketDisconnectAsync0, WebSocketDisconnectSync,
-     WebSocketPing, WebSocketProtocol0, WebSocketSubscriptions0, SSL, Compress,
+     WebSocketPing, WebSocketProtocol0, WebSocketNameUnique,
+     WebSocketSubscriptions0, SSL, Compress,
      MaxConnections, MaxEmptyLines, MaxHeaderNameLength, MaxHeaderValueLength,
      MaxHeaders, MaxKeepAlive, MaxRequestLineLength,
      OutputType, ContentTypeForced0, ContentTypesAccepted0, SetXForwardedFor,
@@ -313,6 +320,7 @@ cloudi_service_init(Args, Prefix, Dispatcher) ->
         _ when is_function(WebSocketProtocol0, 2) ->
             WebSocketProtocol0
     end,
+    true = is_boolean(WebSocketNameUnique),
     WebSocketSubscriptions1 = if
         WebSocketSubscriptions0 == [] ->
             undefined;
@@ -355,12 +363,15 @@ cloudi_service_init(Args, Prefix, Dispatcher) ->
     true = is_boolean(UseMethodSuffix),
     false = lists:member($*, Prefix),
     ContentTypeLookup = cloudi_response_info:lookup_content_type(),
+    {_, Scope} = lists:keyfind(groups_scope, 1,
+                               cloudi_service:context_options(Dispatcher)),
     Dispatch = cowboy_router:compile([
         %% {Host, list({Path, Handler, Opts})}
         {'_', [{'_', cloudi_http_cowboy_handler,
                 #cowboy_state{dispatcher =
                                   cloudi_service:dispatcher(Dispatcher),
                               context = create_context(Dispatcher),
+                              scope = Scope,
                               prefix = Prefix,
                               timeout_websocket = WebSocketTimeout,
                               output_type = OutputType,
@@ -373,6 +384,7 @@ cloudi_service_init(Args, Prefix, Dispatcher) ->
                               websocket_disconnect = WebSocketDisconnect1,
                               websocket_ping = WebSocketPing,
                               websocket_protocol = WebSocketProtocol1,
+                              websocket_name_unique = WebSocketNameUnique,
                               websocket_subscriptions = WebSocketSubscriptions1,
                               use_websockets = UseWebSockets,
                               use_host_prefix = UseHostPrefix,

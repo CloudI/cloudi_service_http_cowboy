@@ -44,32 +44,34 @@
 %% cowboy handler state
 -record(cowboy_state,
     {
-        dispatcher              :: cloudi_service:dispatcher(),
-        context                 :: cloudi:context(),
-        prefix                  :: string(),
-        timeout_websocket       :: infinity | pos_integer(),
-        output_type             :: external | internal | list | binary,
-        content_type_forced     :: undefined | binary(),
-        content_types_accepted  :: undefined | binary:cp(),
-        set_x_forwarded_for     :: boolean(),
-        status_code_timeout     :: 100..599,
-        websocket_output_type   :: text | binary,
-        websocket_connect       :: undefined |
-                                   {async | sync,
-                                    cloudi_service:service_name()},
-        websocket_disconnect    :: undefined |
-                                   {async | sync,
-                                    cloudi_service:service_name()},
-        websocket_ping          :: undefined | received | pos_integer(),
-        websocket_protocol      :: undefined |
-                                   fun((incoming | outgoing, any()) ->
-                                       {incoming | any(), any()}),
-        websocket_subscriptions :: undefined | trie:trie(),
-        use_websockets          :: boolean() | exclusively,
-        use_host_prefix         :: boolean(),
-        use_client_ip_prefix    :: boolean(),
-        use_method_suffix       :: boolean(),
-        content_type_lookup     :: undefined | trie:trie(),
-        websocket_state         :: tuple()
+        dispatcher                :: cloudi_service:dispatcher(),
+        context                   :: cloudi:context(),
+        scope                     :: atom(),
+        prefix                    :: string(),
+        timeout_websocket         :: infinity | pos_integer(),
+        output_type               :: external | internal | list | binary,
+        content_type_forced       :: undefined | binary(),
+        content_types_accepted    :: undefined | binary:cp(),
+        set_x_forwarded_for       :: boolean(),
+        status_code_timeout       :: 100..599,
+        websocket_output_type     :: text | binary,
+        websocket_connect         :: undefined |
+                                     {async | sync,
+                                      cloudi_service:service_name()},
+        websocket_disconnect      :: undefined |
+                                     {async | sync,
+                                      cloudi_service:service_name()},
+        websocket_ping            :: undefined | received | pos_integer(),
+        websocket_protocol        :: undefined |
+                                     fun((incoming | outgoing, any()) ->
+                                         {incoming | any(), any()}),
+        websocket_name_unique     :: boolean(),
+        websocket_subscriptions   :: undefined | trie:trie(),
+        use_websockets            :: boolean() | exclusively,
+        use_host_prefix           :: boolean(),
+        use_client_ip_prefix      :: boolean(),
+        use_method_suffix         :: boolean(),
+        content_type_lookup       :: undefined | trie:trie(),
+        websocket_state           :: tuple()
     }).
 
