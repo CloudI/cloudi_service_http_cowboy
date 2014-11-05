@@ -8,9 +8,6 @@ before_script:
 script: rebar compile
 after_script:
   - rebar clean
-branches:
-  only:
-    - master
 notifications:
   irc:
     channels:
