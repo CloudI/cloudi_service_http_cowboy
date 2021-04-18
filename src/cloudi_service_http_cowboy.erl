@@ -9,7 +9,7 @@
 %%%
 %%% MIT License
 %%%
-%%% Copyright (c) 2012-2018 Michael Truog <mjtruog at protonmail dot com>
+%%% Copyright (c) 2012-2021 Michael Truog <mjtruog at protonmail dot com>
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a
 %%% copy of this software and associated documentation files (the "Software"),
@@ -30,8 +30,8 @@
 %%% DEALINGS IN THE SOFTWARE.
 %%%
 %%% @author Michael Truog <mjtruog at protonmail dot com>
-%%% @copyright 2012-2018 Michael Truog
-%%% @version 1.7.4 {@date} {@time}
+%%% @copyright 2012-2021 Michael Truog
+%%% @version 2.0.2 {@date} {@time}
 %%%------------------------------------------------------------------------
 
 -module(cloudi_service_http_cowboy).
@@ -44,7 +44,6 @@
 
 %% cloudi_service callbacks
 -export([cloudi_service_init/4,
-         cloudi_service_handle_request/11,
          cloudi_service_handle_info/3,
          cloudi_service_terminate/3]).
 
@@ -58,14 +57,11 @@
 -define(DEFAULT_NODELAY,                           true).
 -define(DEFAULT_RECV_TIMEOUT,                      5000). % milliseconds
 -define(DEFAULT_BODY_TIMEOUT,                     15000). % milliseconds
--define(DEFAULT_BODY_LENGTH_READ,               1000000).
--define(DEFAULT_BODY_LENGTH_CHUNK,              8000000).
+-define(DEFAULT_BODY_LENGTH_READ,               8000000).
 -define(DEFAULT_MULTIPART_HEADER_TIMEOUT,          5000). % milliseconds
 -define(DEFAULT_MULTIPART_HEADER_LENGTH_READ,     64000).
--define(DEFAULT_MULTIPART_HEADER_LENGTH_CHUNK,    64000).
 -define(DEFAULT_MULTIPART_BODY_TIMEOUT,           15000). % milliseconds
--define(DEFAULT_MULTIPART_BODY_LENGTH_READ,     1000000).
--define(DEFAULT_MULTIPART_BODY_LENGTH_CHUNK,    8000000).
+-define(DEFAULT_MULTIPART_BODY_LENGTH_READ,     8000000).
 -define(DEFAULT_MULTIPART_DESTINATION_LOCK,        true).
 -define(DEFAULT_WEBSOCKET_TIMEOUT,             infinity). % milliseconds
 -define(DEFAULT_WEBSOCKET_OUTPUT,                binary).
@@ -133,12 +129,31 @@
 -define(DEFAULT_MAX_KEEPALIVE,                      100). % requests in session
 -define(DEFAULT_MAX_REQUEST_LINE_LENGTH,           4096).
 -define(DEFAULT_OUTPUT,                        external).
--define(DEFAULT_CONTENT_TYPE,                 undefined). % force a content type
+-define(DEFAULT_CONTENT_TYPE,                 undefined).
+        % Provide the exact value to set if no
+        % response headers were provided.
+        % If this value is not set and no response headers
+        % were provided, the value is guessed based on the
+        % file extension.
 -define(DEFAULT_CONTENT_TYPES_ACCEPTED,       undefined). % see below:
         % Provide a list of content types strings
         % (list of integers or binaries) which must match the
         % HTTP request "Accept" header value
+-define(DEFAULT_CONTENT_SECURITY_POLICY,      undefined).
+        % Provide the exact value to set
+        % if it was not already provided and the content-type is text/html
+        % (e.g., "default-src 'self'").
+-define(DEFAULT_CONTENT_SECURITY_POLICY_REPORT_ONLY,
+                                              undefined).
+        % Provide the exact value to set
+        % if it was not already provided and the content-type is text/html
 -define(DEFAULT_SET_X_FORWARDED_FOR,              false). % if it is missing
+-define(DEFAULT_SET_X_XSS_PROTECTION,             false).
+        % If true, then use "0" for the value
+        % if it was not already provided and the content-type is text/html.
+-define(DEFAULT_SET_X_CONTENT_TYPE_OPTIONS,       false).
+        % If true, then use "nosniff" for the value
+        % if it was not already provided (when "content-type" is set).
 -define(DEFAULT_STATUS_CODE_TIMEOUT,                504). % "Gateway Timeout"
 -define(DEFAULT_QUERY_GET_FORMAT,                   raw). % see below:
         % If set to 'text_pairs' any GET query string is parsed and
@@ -155,7 +170,6 @@
         % Request data (so using GET request body data will be ignored,
         % due to being bad practice).
 -define(DEFAULT_USE_WEBSOCKETS,                   false).
--define(DEFAULT_USE_SPDY,                         false).
 -define(DEFAULT_USE_HOST_PREFIX,                  false). % for virtual hosts
 -define(DEFAULT_USE_CLIENT_IP_PREFIX,             false).
 -define(DEFAULT_USE_X_METHOD_OVERRIDE,            false).
@@ -216,13 +230,10 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
         {recv_timeout,                  ?DEFAULT_RECV_TIMEOUT},
         {body_timeout,                  ?DEFAULT_BODY_TIMEOUT},
         {body_length_read,              ?DEFAULT_BODY_LENGTH_READ},
-        {body_length_chunk,             ?DEFAULT_BODY_LENGTH_CHUNK},
         {multipart_header_timeout,      ?DEFAULT_MULTIPART_HEADER_TIMEOUT},
         {multipart_header_length_read,  ?DEFAULT_MULTIPART_HEADER_LENGTH_READ},
-        {multipart_header_length_chunk, ?DEFAULT_MULTIPART_HEADER_LENGTH_CHUNK},
         {multipart_body_timeout,        ?DEFAULT_MULTIPART_BODY_TIMEOUT},
         {multipart_body_length_read,    ?DEFAULT_MULTIPART_BODY_LENGTH_READ},
-        {multipart_body_length_chunk,   ?DEFAULT_MULTIPART_BODY_LENGTH_CHUNK},
         {multipart_destination_lock,    ?DEFAULT_MULTIPART_DESTINATION_LOCK},
         {websocket_timeout,             ?DEFAULT_WEBSOCKET_TIMEOUT},
         {websocket_output,              ?DEFAULT_WEBSOCKET_OUTPUT},
@@ -248,20 +259,24 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
         {output,                        ?DEFAULT_OUTPUT},
         {content_type,                  ?DEFAULT_CONTENT_TYPE},
         {content_types_accepted,        ?DEFAULT_CONTENT_TYPES_ACCEPTED},
+        {content_security_policy,       ?DEFAULT_CONTENT_SECURITY_POLICY},
+        {content_security_policy_report_only,
+         ?DEFAULT_CONTENT_SECURITY_POLICY_REPORT_ONLY},
         {set_x_forwarded_for,           ?DEFAULT_SET_X_FORWARDED_FOR},
+        {set_x_xss_protection,          ?DEFAULT_SET_X_XSS_PROTECTION},
+        {set_x_content_type_options,    ?DEFAULT_SET_X_CONTENT_TYPE_OPTIONS},
         {status_code_timeout,           ?DEFAULT_STATUS_CODE_TIMEOUT},
         {query_get_format,              ?DEFAULT_QUERY_GET_FORMAT},
         {use_websockets,                ?DEFAULT_USE_WEBSOCKETS},
-        {use_spdy,                      ?DEFAULT_USE_SPDY},
         {use_host_prefix,               ?DEFAULT_USE_HOST_PREFIX},
         {use_client_ip_prefix,          ?DEFAULT_USE_CLIENT_IP_PREFIX},
         {use_x_method_override,         ?DEFAULT_USE_X_METHOD_OVERRIDE},
         {use_method_suffix,             ?DEFAULT_USE_METHOD_SUFFIX},
         {update_delay,                  ?DEFAULT_UPDATE_DELAY}],
     [Interface, Port, Backlog, NoDelay, RecvTimeout,
-     BodyTimeout, BodyLengthRead, BodyLengthChunk, MultipartHeaderTimeout,
-     MultipartHeaderLengthRead, MultipartHeaderLengthChunk,
-     MultipartBodyTimeout, MultipartBodyLengthRead, MultipartBodyLengthChunk,
+     BodyTimeout, BodyLengthRead, MultipartHeaderTimeout,
+     MultipartHeaderLengthRead,
+     MultipartBodyTimeout, MultipartBodyLengthRead,
      MultipartDestinationLock, WebSocketTimeout, WebSocketOutputType,
      WebSocketConnect0, WebSocketDisconnect0,
      WebSocketConnectAsync0, WebSocketConnectSync,
@@ -269,9 +284,11 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
      WebSocketPing, WebSocketProtocol0, WebSocketNameUnique,
      WebSocketSubscriptions0, SSL, Compress,
      MaxConnections, MaxEmptyLines, MaxHeaderNameLength, MaxHeaderValueLength,
-     MaxHeaders, MaxKeepAlive, MaxRequestLineLength,
-     OutputType, ContentTypeForced0, ContentTypesAccepted0, SetXForwardedFor,
-     StatusCodeTimeout, QueryGetFormat, UseWebSockets, UseSpdy,
+     MaxHeaders, MaxKeepAlive, MaxRequestLineLength, OutputType,
+     ContentTypeForced0, ContentTypesAccepted0, ContentSecurityPolicy0,
+     ContentSecurityPolicyReport0,
+     SetXForwardedFor, SetXXSSProtection, SetXContentTypeOptions,
+     StatusCodeTimeout, QueryGetFormat, UseWebSockets,
      UseHostPrefix, UseClientIpPrefix, UseXMethodOverride, UseMethodSuffix,
      UpdateDelaySeconds] =
         cloudi_proplists:take_values(Defaults, Args),
@@ -282,19 +299,14 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
     true = is_integer(RecvTimeout) andalso (RecvTimeout > 0),
     true = is_integer(BodyTimeout) andalso (BodyTimeout > 0),
     true = is_integer(BodyLengthRead) andalso (BodyLengthRead > 0),
-    true = is_integer(BodyLengthChunk) andalso (BodyLengthChunk > 0),
     true = is_integer(MultipartHeaderTimeout) andalso
            (MultipartHeaderTimeout > 0),
     true = is_integer(MultipartHeaderLengthRead) andalso
            (MultipartHeaderLengthRead > 0),
-    true = is_integer(MultipartHeaderLengthChunk) andalso
-           (MultipartHeaderLengthChunk > 0),
     true = is_integer(MultipartBodyTimeout) andalso
            (MultipartBodyTimeout > 0),
     true = is_integer(MultipartBodyLengthRead) andalso
            (MultipartBodyLengthRead > 0),
-    true = is_integer(MultipartBodyLengthChunk) andalso
-           (MultipartBodyLengthChunk > 0),
     true = is_boolean(MultipartDestinationLock),
     true = (WebSocketTimeout =:= infinity) orelse
            (is_integer(WebSocketTimeout) andalso (WebSocketTimeout > 0)),
@@ -313,7 +325,7 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
     true = (WebSocketConnectSync =:= undefined) orelse
            (is_list(WebSocketConnectSync) andalso
             is_integer(hd(WebSocketConnectSync))),
-    WebSocketConnect1 = if
+    WebSocketConnectN = if
         WebSocketConnectAsync1 =/= undefined,
         WebSocketConnectSync =:= undefined ->
             {async, WebSocketConnectAsync1};
@@ -337,7 +349,7 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
     true = (WebSocketDisconnectSync =:= undefined) orelse
            (is_list(WebSocketDisconnectSync) andalso
             is_integer(hd(WebSocketDisconnectSync))),
-    WebSocketDisconnect1 = if
+    WebSocketDisconnectN = if
         WebSocketDisconnectAsync1 =/= undefined,
         WebSocketDisconnectSync =:= undefined ->
             {async, WebSocketDisconnectAsync1};
@@ -350,16 +362,21 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
     end,
     true = (WebSocketPing =:= undefined) orelse
            (is_integer(WebSocketPing) andalso (WebSocketPing > 0)),
-    WebSocketProtocol1 = cloudi_args_type:
+    WebSocketProtocolN = cloudi_args_type:
                          function_optional(WebSocketProtocol0, 2),
     true = is_boolean(WebSocketNameUnique),
-    WebSocketSubscriptions1 = if
+    WebSocketSubscriptionsN = if
         WebSocketSubscriptions0 == [] ->
             undefined;
         is_list(WebSocketSubscriptions0) ->
             websocket_subscriptions_lookup(WebSocketSubscriptions0, Prefix)
     end,
-    true = is_boolean(Compress),
+    CompressThreshold = if
+        Compress =:= true ->
+            300; % bytes
+        Compress =:= false ->
+            18446744073709551615
+    end,
     true = is_integer(MaxConnections),
     true = is_integer(MaxEmptyLines),
     true = is_integer(MaxHeaderNameLength),
@@ -369,21 +386,45 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
     true = is_integer(MaxRequestLineLength),
     true = (OutputType =:= external) orelse (OutputType =:= internal) orelse
            (OutputType =:= list) orelse (OutputType =:= binary),
-    ContentTypeForced1 = if
+    ContentTypeForcedN = if
         ContentTypeForced0 =:= undefined ->
             undefined;
-        is_list(ContentTypeForced0) ->
+        is_list(ContentTypeForced0),
+        is_integer(hd(ContentTypeForced0)) ->
             erlang:list_to_binary(ContentTypeForced0);
-        is_binary(ContentTypeForced0) ->
+        is_binary(ContentTypeForced0),
+        ContentTypeForced0 /= <<>> ->
             ContentTypeForced0
     end,
-    ContentTypesAccepted1 = if
+    ContentTypesAcceptedN = if
         ContentTypesAccepted0 =:= undefined ->
             undefined;
         is_list(ContentTypesAccepted0) ->
             content_types_accepted_pattern(ContentTypesAccepted0)
     end,
+    ContentSecurityPolicyN = if
+        ContentSecurityPolicy0 =:= undefined ->
+            undefined;
+        is_list(ContentSecurityPolicy0),
+        is_integer(hd(ContentSecurityPolicy0)) ->
+            erlang:list_to_binary(ContentSecurityPolicy0);
+        is_binary(ContentSecurityPolicy0),
+        ContentSecurityPolicy0 /= <<>> ->
+            ContentSecurityPolicy0
+    end,
+    ContentSecurityPolicyReportN = if
+        ContentSecurityPolicyReport0 =:= undefined ->
+            undefined;
+        is_list(ContentSecurityPolicyReport0),
+        is_integer(hd(ContentSecurityPolicyReport0)) ->
+            erlang:list_to_binary(ContentSecurityPolicyReport0);
+        is_binary(ContentSecurityPolicyReport0),
+        ContentSecurityPolicyReport0 /= <<>> ->
+            ContentSecurityPolicyReport0
+    end,
     true = is_boolean(SetXForwardedFor),
+    true = is_boolean(SetXXSSProtection),
+    true = is_boolean(SetXContentTypeOptions),
     true = is_integer(StatusCodeTimeout) andalso
            (StatusCodeTimeout > 100) andalso
            (StatusCodeTimeout =< 599),
@@ -391,7 +432,6 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
            (QueryGetFormat =:= text_pairs),
     true = (is_boolean(UseWebSockets) orelse
             (UseWebSockets =:= exclusively)),
-    true = is_boolean(UseSpdy),
     true = is_boolean(UseHostPrefix),
     true = is_boolean(UseClientIpPrefix),
     true = ((UseXMethodOverride =:= true) andalso
@@ -400,7 +440,7 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
     true = is_boolean(UseMethodSuffix),
     true = is_integer(UpdateDelaySeconds) andalso
            (UpdateDelaySeconds > 0) andalso (UpdateDelaySeconds =< 4294967),
-    false = lists:member($*, Prefix),
+    false = cloudi_service_name:pattern(Prefix),
     {_, Scope} = lists:keyfind(groups_scope, 1,
                                cloudi_service:context_options(Dispatcher)),
     HandlerState = #cowboy_state{
@@ -414,25 +454,26 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
         timeout_part_body = MultipartBodyTimeout,
         timeout_websocket = WebSocketTimeout,
         length_body_read = BodyLengthRead,
-        length_body_chunk = BodyLengthChunk,
         length_part_header_read = MultipartHeaderLengthRead,
-        length_part_header_chunk = MultipartHeaderLengthChunk,
         length_part_body_read = MultipartBodyLengthRead,
-        length_part_body_chunk = MultipartBodyLengthChunk,
         parts_destination_lock = MultipartDestinationLock,
         output_type = OutputType,
-        content_type_forced = ContentTypeForced1,
-        content_types_accepted = ContentTypesAccepted1,
+        content_type_forced = ContentTypeForcedN,
+        content_types_accepted = ContentTypesAcceptedN,
+        content_security_policy = ContentSecurityPolicyN,
+        content_security_policy_report = ContentSecurityPolicyReportN,
         set_x_forwarded_for = SetXForwardedFor,
+        set_x_xss_protection = SetXXSSProtection,
+        set_x_content_type_options = SetXContentTypeOptions,
         status_code_timeout = StatusCodeTimeout,
         query_get_format = QueryGetFormat,
         websocket_output_type = WebSocketOutputType,
-        websocket_connect = WebSocketConnect1,
-        websocket_disconnect = WebSocketDisconnect1,
+        websocket_connect = WebSocketConnectN,
+        websocket_disconnect = WebSocketDisconnectN,
         websocket_ping = WebSocketPing,
-        websocket_protocol = WebSocketProtocol1,
+        websocket_protocol = WebSocketProtocolN,
         websocket_name_unique = WebSocketNameUnique,
-        websocket_subscriptions = WebSocketSubscriptions1,
+        websocket_subscriptions = WebSocketSubscriptionsN,
         use_websockets = UseWebSockets,
         use_host_prefix = UseHostPrefix,
         use_client_ip_prefix = UseClientIpPrefix,
@@ -441,14 +482,6 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
     Service = cloudi_service:self(Dispatcher),
     erlang:send_after(UpdateDelaySeconds * 1000, Service,
                       {update, UpdateDelaySeconds}),
-    StartFunction = if
-        UseSpdy =:= true ->
-            start_spdy;
-        is_list(SSL) ->
-            start_https;
-        SSL =:= false ->
-            start_http
-    end,
     {ok, ListenerPid} = if
         is_list(SSL) ->
             {value,
@@ -461,54 +494,66 @@ cloudi_service_init(Args, Prefix, _Timeout, Dispatcher) ->
             Environment = cloudi_environment:lookup(),
             NewSSLOpts = environment_transform_ssl_options(SSLOpts,
                                                            Environment),
-            cowboy:StartFunction(
+            cowboy:start_tls(
                 Service, % Ref
-                100, % Number of acceptor processes
-                [{ip, Interface},
-                 {port, Port},
-                 {backlog, Backlog},
-                 {nodelay, NoDelay},
-                 {max_connections, MaxConnections},
-                 {certfile, CertFile}] ++
-                NewSSLOpts, % Transport options
-                [{env, [{dispatch, cowboy_dispatch(HandlerState)}]},
-                 {compress, Compress},
-                 {max_empty_lines, MaxEmptyLines},
-                 {max_header_name_length, MaxHeaderNameLength},
-                 {max_header_value_length, MaxHeaderValueLength},
-                 {max_headers, MaxHeaders},
-                 {max_keepalive, MaxKeepAlive},
-                 {max_request_line_length, MaxRequestLineLength},
-                 {timeout, RecvTimeout}] % Protocol options
+                #{
+                    % Transport options
+                    socket_opts => [
+                        {ip, Interface},
+                        {port, Port},
+                        {backlog, Backlog},
+                        {nodelay, NoDelay},
+                        {certfile, CertFile}
+                    ] ++ NewSSLOpts,
+                    max_connections => MaxConnections,
+                    connection_type => worker,
+                    num_acceptors => 10
+                },
+                #{
+                    % Protocol options
+                    env => #{dispatch => cowboy_dispatch(HandlerState)},
+                    compress_threshold =>  CompressThreshold,
+                    max_empty_lines => MaxEmptyLines,
+                    max_header_name_length => MaxHeaderNameLength,
+                    max_header_value_length => MaxHeaderValueLength,
+                    max_headers => MaxHeaders,
+                    max_keepalive => MaxKeepAlive,
+                    max_request_line_length => MaxRequestLineLength,
+                    idle_timeout => RecvTimeout
+                }
             );
         SSL =:= false ->
-            cowboy:StartFunction(
+            cowboy:start_clear(
                 Service, % Ref
-                100, % Number of acceptor processes
-                [{ip, Interface},
-                 {port, Port},
-                 {backlog, Backlog},
-                 {nodelay, NoDelay},
-                 {max_connections, MaxConnections}], % Transport options
-                [{env, [{dispatch, cowboy_dispatch(HandlerState)}]},
-                 {compress, Compress},
-                 {max_empty_lines, MaxEmptyLines},
-                 {max_header_name_length, MaxHeaderNameLength},
-                 {max_header_value_length, MaxHeaderValueLength},
-                 {max_headers, MaxHeaders},
-                 {max_keepalive, MaxKeepAlive},
-                 {max_request_line_length, MaxRequestLineLength},
-                 {timeout, RecvTimeout}] % Protocol options
+                #{
+                    % Transport options
+                    socket_opts => [
+                        {ip, Interface},
+                        {port, Port},
+                        {backlog, Backlog},
+                        {nodelay, NoDelay}
+                    ],
+                    max_connections => MaxConnections,
+                    connection_type => worker,
+                    num_acceptors => 10
+                },
+                #{
+                    % Protocol options
+                    env => #{dispatch => cowboy_dispatch(HandlerState)},
+                    compress_threshold =>  CompressThreshold,
+                    max_empty_lines => MaxEmptyLines,
+                    max_header_name_length => MaxHeaderNameLength,
+                    max_header_value_length => MaxHeaderValueLength,
+                    max_headers => MaxHeaders,
+                    max_keepalive => MaxKeepAlive,
+                    max_request_line_length => MaxRequestLineLength,
+                    idle_timeout => RecvTimeout
+                }
             )
     end,
     {ok, #state{listener = ListenerPid,
                 service = Service,
                 handler_state = HandlerState}}.
-
-cloudi_service_handle_request(_Type, _Name, _Pattern, _RequestInfo, _Request,
-                              _Timeout, _Priority, _TransId, _Pid,
-                              State, _Dispatcher) ->
-    {reply, <<>>, State}.
 
 cloudi_service_handle_info({update, UpdateDelaySeconds},
                            #state{service = Service,
@@ -546,11 +591,7 @@ cloudi_service_terminate(_Reason, _Timeout, undefined) ->
     ok;
 cloudi_service_terminate(_Reason, _Timeout,
                          #state{service = Service}) ->
-    try cowboy:stop_listener(Service)
-    catch
-        exit:{noproc, _} ->
-            ?LOG_WARN("ranch noproc", [])
-    end,
+    _ = (catch cowboy:stop_listener(Service)),
     ok.
 
 %%%------------------------------------------------------------------------
@@ -602,7 +643,7 @@ websocket_subscriptions_lookup([{PatternSuffix, L} |
             Name = Prefix ++ Suffix,
             true = ((ParametersAllowed =:= true) orelse
                     ((ParametersAllowed =:= false) andalso
-                     (trie:is_pattern(Name) =:= false))),
+                     (cloudi_service_name:pattern(Name) =:= false))),
             F = if
                 ParametersAllowed =:= true ->
                     fun(Parameters) ->

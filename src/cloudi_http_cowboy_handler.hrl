@@ -5,7 +5,7 @@
 %%%
 %%% MIT License
 %%%
-%%% Copyright (c) 2012-2017 Michael Truog <mjtruog at protonmail dot com>
+%%% Copyright (c) 2012-2021 Michael Truog <mjtruog at protonmail dot com>
 %%%
 %%% Permission is hereby granted, free of charge, to any person obtaining a
 %%% copy of this software and associated documentation files (the "Software"),
@@ -40,16 +40,17 @@
         timeout_part_body :: pos_integer(),
         timeout_websocket :: infinity | pos_integer(),
         length_body_read :: pos_integer(),
-        length_body_chunk :: pos_integer(),
         length_part_header_read :: pos_integer(),
-        length_part_header_chunk :: pos_integer(),
         length_part_body_read :: pos_integer(),
-        length_part_body_chunk :: pos_integer(),
         parts_destination_lock :: boolean(),
         output_type :: external | internal | list | binary,
         content_type_forced :: undefined | binary(),
         content_types_accepted :: undefined | binary:cp(),
+        content_security_policy :: undefined | binary(),
+        content_security_policy_report :: undefined | binary(),
         set_x_forwarded_for :: boolean(),
+        set_x_xss_protection :: boolean(),
+        set_x_content_type_options :: boolean(),
         status_code_timeout :: 100..599,
         query_get_format :: raw | text_pairs,
         websocket_output_type :: text | binary,
