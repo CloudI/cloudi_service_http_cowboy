@@ -6,7 +6,7 @@ defmodule CloudIServiceHttpCowboy do
 
   def project do
     [app: :cloudi_service_http_cowboy,
-     version: "1.7.4",
+     version: "2.0.2",
      language: :erlang,
      erlc_options: [
        :debug_info,
@@ -29,16 +29,16 @@ defmodule CloudIServiceHttpCowboy do
   end
 
   defp deps do
-    [{:cowboy, "~> 1.1.2"},
-     {:cloudi_core, "~> 1.7.4"}]
+    [{:cowboy, "~> 2.9.0"},
+     {:cloudi_core, "~> 2.0.2"}]
   end
 
   defp description do
-    "Erlang/Elixir Cloud Framework cowboy HTTP/HTTPS Service"
+    "Erlang/Elixir Cloud Framework cowboy 2.x HTTP/HTTPS Service"
   end
 
   defp package do
-    [files: ~w(src doc rebar.config README.markdown),
+    [files: ~w(src doc rebar.config README.markdown LICENSE),
      maintainers: ["Michael Truog"],
      licenses: ["MIT"],
      links: %{"Website" => "https://cloudi.org",
