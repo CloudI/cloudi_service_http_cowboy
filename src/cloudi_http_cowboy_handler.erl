@@ -1233,14 +1233,22 @@ handle_response(NameIncoming, HeadersOutgoing0, Response,
         error ->
             {false, false}
     end,
+    HTTP1 = case cowboy_req:version(Req0) of
+        'HTTP/1.1' ->
+            true;
+        'HTTP/1.0' ->
+            true;
+        _ ->
+            false
+    end,
     HeadersOutgoing4 = if
         ContentTypeSet =:= true ->
             if
-                SetXContentTypeOptions =:= true ->
+                HTTP1 andalso SetXContentTypeOptions ->
                     header_set_if_not(<<"X-Content-Type-Options">>,
                                       <<"nosniff">>,
                                       HeadersOutgoing3);
-                SetXContentTypeOptions =:= false ->
+                true ->
                     HeadersOutgoing3
             end;
         ContentTypeSet =:= false ->
@@ -1249,11 +1257,11 @@ handle_response(NameIncoming, HeadersOutgoing0, Response,
     HeadersOutgoingN = if
         ContentTypeHTML =:= true ->
             HeadersOutgoing5 = if
-                SetXXSSProtection =:= true ->
+                HTTP1 andalso SetXXSSProtection ->
                     header_set_if_not(<<"X-XSS-Protection">>,
                                       <<"0">>,
                                       HeadersOutgoing4);
-                SetXXSSProtection =:= false ->
+                true ->
                     HeadersOutgoing4
             end,
             HeadersOutgoing6 = if
